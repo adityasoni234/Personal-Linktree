@@ -17,8 +17,19 @@ from app.core.config import settings
 from app.core.logging import app_logger
 
 
+def _normalise_db_url(url: str) -> str:
+    """Render (and many PaaS providers) supply a plain ``postgres://`` or
+    ``postgresql://`` URL.  SQLAlchemy 2 needs the *async* dialect marker so
+    it picks asyncpg instead of falling back to the absent psycopg2."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+asyncpg://" + url[len(prefix):]
+    return url  # already has a dialect marker (e.g. sqlite, postgresql+asyncpg)
+
+
 def _create_engine() -> AsyncEngine:
     is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+    db_url = settings.DATABASE_URL if is_sqlite else _normalise_db_url(settings.DATABASE_URL)
     kwargs: dict = {
         "echo": settings.DB_ECHO,
         "pool_pre_ping": True,
@@ -33,7 +44,7 @@ def _create_engine() -> AsyncEngine:
             max_overflow=settings.DB_MAX_OVERFLOW,
             pool_recycle=settings.DB_POOL_RECYCLE_SECONDS,
         )
-    return create_async_engine(settings.DATABASE_URL, **kwargs)
+    return create_async_engine(db_url, **kwargs)
 
 
 engine: AsyncEngine = _create_engine()

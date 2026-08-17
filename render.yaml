@@ -43,6 +43,7 @@ services:
     name: linktree-redis
     plan: free
     maxmemoryPolicy: noeviction
+    ipAllowList: []
 
 databases:
   - name: linktree-db

@@ -39,11 +39,13 @@ services:
       - key: STORAGE_BACKEND
         value: local
 
+  - type: redis
+    name: linktree-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+
 databases:
   - name: linktree-db
     plan: free
     databaseName: linkhub
     user: linkhub
-
-  - name: linktree-redis
-    plan: free

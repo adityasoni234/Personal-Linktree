@@ -39,7 +39,9 @@ Thumbs.db
 # ---- Runtime data ----
 media/
 uploads/
-storage/
+/storage/
+backend/storage/
+!backend/app/storage/
 *.sqlite3
 *.db
 logs/

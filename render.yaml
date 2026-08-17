@@ -14,23 +14,36 @@ services:
       - key: DEBUG
         value: "false"
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: linktree-db
+          property: connectionString
       - key: REDIS_URL
-        sync: false
+        fromService:
+          name: linktree-redis
+          type: redis
+          property: connectionString
       - key: JWT_SECRET
-        sync: false
+        value: hVXRLowom6ow2CwgbkAZFBn7OfU_hMXAdJIHqzp1sPuhlPNW9_9DTUDzKromIyvuyaRvu6dU6Y1_X0cO3i2ffA
       - key: JWT_REFRESH_SECRET
-        sync: false
+        value: NAqU6Eg_9LsQQTzMaULYrxqttAJrfiyZl8CnmjrFREv2TPU4333Ddm3fJJ8GWRXsaZzMcSU2BFwoTpkBW62sFw
       - key: ANALYTICS_IP_PEPPER
-        sync: false
+        value: AJg0XGPIjvdxXnJMmkzz8Ry81vOJocScnyFAoowbaik
       - key: CORS_ORIGINS
-        sync: false
+        value: https://personal-linktree-git-main-adityas-projects-383f5a26.vercel.app,https://personal-linktree-a38up182v-adityas-projects-383f5a26.vercel.app
       - key: FRONTEND_URL
-        sync: false
+        value: https://personal-linktree-git-main-adityas-projects-383f5a26.vercel.app
       - key: PUBLIC_BASE_URL
-        sync: false
+        value: https://linktree-backend.onrender.com
       - key: COOKIE_SECURE
         value: "true"
       - key: STORAGE_BACKEND
         value: local
 
+databases:
+  - name: linktree-db
+    plan: free
+    databaseName: linkhub
+    user: linkhub
+
+  - name: linktree-redis
+    plan: free

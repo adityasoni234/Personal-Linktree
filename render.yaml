@@ -29,9 +29,9 @@ services:
       - key: ANALYTICS_IP_PEPPER
         value: AJg0XGPIjvdxXnJMmkzz8Ry81vOJocScnyFAoowbaik
       - key: CORS_ORIGINS
-        value: https://personal-linktree-git-main-adityas-projects-383f5a26.vercel.app,https://personal-linktree-a38up182v-adityas-projects-383f5a26.vercel.app
+        value: https://personal-linktree-one.vercel.app,https://personal-linktree-git-main-adityas-projects-383f5a26.vercel.app,https://personal-linktree-a38up182v-adityas-projects-383f5a26.vercel.app
       - key: FRONTEND_URL
-        value: https://personal-linktree-git-main-adityas-projects-383f5a26.vercel.app
+        value: https://personal-linktree-one.vercel.app
       - key: PUBLIC_BASE_URL
         value: https://linktree-backend-u6g7.onrender.com
       - key: COOKIE_SECURE

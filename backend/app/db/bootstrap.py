@@ -11,12 +11,19 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.logging import app_logger, security_logger
-from app.db.session import session_scope
+from app.db.session import engine, session_scope
+from app.models import Base
 from app.models.enums import Role, UserStatus
 from app.models.membership import Membership
 from app.models.organization import Organization
 from app.models.user import User
 from app.security.passwords import hash_password, validate_password_strength
+
+
+async def ensure_database_schema() -> None:
+    """Create all ORM tables if they don't already exist."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 async def ensure_default_organization() -> None:
@@ -106,5 +113,6 @@ async def ensure_super_admin() -> None:
 
 
 async def run_bootstrap() -> None:
+    await ensure_database_schema()
     await ensure_default_organization()
     await ensure_super_admin()

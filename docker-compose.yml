@@ -1,0 +1,105 @@
+# Development stack: Postgres + Redis + FastAPI + Vite dev server.
+# For production see docker-compose.prod.yml and docs/DEPLOYMENT.md.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-linkhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-linkhub}
+      POSTGRES_DB: ${POSTGRES_DB:-linkhub}
+      # Enforce scram-sha-256 rather than the weaker default.
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Not published to the host by default — the API reaches it over the
+    # compose network. Uncomment only when you need a local SQL client.
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-linkhub} -d ${POSTGRES_DB:-linkhub}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [linkhub]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [linkhub]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-linkhub}:${POSTGRES_PASSWORD:-linkhub}@postgres:5432/${POSTGRES_DB:-linkhub}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_LOCAL_DIR: /var/lib/linkhub/media
+    volumes:
+      - media_data:/var/lib/linkhub/media
+      # Live reload during development; remove for production images.
+      - ./backend/app:/app/app:ro
+      - ./backend/migrations:/app/migrations:ro
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+      - --reload
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [linkhub]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    restart: unless-stopped
+    environment:
+      # Same-origin path; the Vite dev server proxies it to the backend so the
+      # HttpOnly refresh cookie is first-party, exactly as it is in production.
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+      VITE_PUBLIC_BASE_URL: ${VITE_PUBLIC_BASE_URL:-http://localhost:5173}
+      VITE_DEV_API_TARGET: http://backend:8000
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on: [backend]
+    networks: [linkhub]
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:
+
+networks:
+  linkhub:
+    driver: bridge

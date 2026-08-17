@@ -1,0 +1,122 @@
+# Production stack: nginx reverse proxy → FastAPI (multi-worker) + built SPA.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Prerequisites: a real .env with ENVIRONMENT=production and strong secrets, and
+# TLS certificates mounted into ./infra/nginx/certs (see docs/DEPLOYMENT.md).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [internal]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    env_file: [.env]
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      LOG_JSON: "true"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --workers
+      - "4"
+      - --proxy-headers
+      # Only the reverse proxy is trusted to set X-Forwarded-For.
+      - --forwarded-allow-ips
+      - "172.16.0.0/12"
+    volumes:
+      - media_data:/var/lib/linkhub/media
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    # No published ports: nginx is the only way in.
+    networks: [internal, edge]
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_PUBLIC_BASE_URL: ${VITE_PUBLIC_BASE_URL}
+    restart: always
+    networks: [edge]
+    security_opt:
+      - no-new-privileges:true
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: always
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/nginx/proxy_headers.conf:/etc/nginx/proxy_headers.conf:ro
+      - ./infra/nginx/certs:/etc/nginx/certs:ro
+      - media_data:/srv/media:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on: [backend, frontend]
+    networks: [edge]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:
+
+networks:
+  # `internal` has no route to the outside world.
+  internal:
+    driver: bridge
+    internal: true
+  edge:
+    driver: bridge
